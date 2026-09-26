@@ -2260,7 +2260,7 @@ function Pasta:CreateWindow(opts)
 		theme:Bind(btn, "BackgroundColor3", "SidebarActive")
 		Utility.Corner(btn, UDim.new(0, 6))
 		local stroke = Utility.Stroke(btn, theme.Current.BorderActive, 1)
-		stroke.Transparency = isFirst and 0 or 1
+		stroke.Transparency = 1 -- sem borda vermelha na tab: ativo indica por bg+icone+texto
 		local iconImg = Utility.Create("ImageLabel", {
 			Size = UDim2.new(0, 14, 0, 14),
 			Position = UDim2.new(0, 9, 0.5, -7),
@@ -2362,7 +2362,6 @@ function Pasta:CreateWindow(opts)
 			local active = (e.Tab == tab)
 			e.Tab._page.Visible = active
 			Animation.Tween(e.Button, { BackgroundTransparency = active and 0 or 1 }, 0.18)
-			Animation.Tween(e.Stroke, { Transparency = active and 0 or 1 }, 0.18)
 			Animation.Tween(e.Icon, { ImageColor3 = active and theme.Current.Accent or theme.Current.TextMuted }, 0.18)
 			Animation.Tween(e.Title, { TextColor3 = active and theme.Current.TextPrimary or theme.Current.TextMuted }, 0.18)
 		end
