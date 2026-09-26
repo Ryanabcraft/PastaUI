@@ -1613,17 +1613,40 @@ local function buildCard(win, tab, opts)
 		Parent = header,
 	})
 	win._theme:Bind(title, "TextColor3", "TextPrimary")
+	local chevHit = Utility.Create("TextButton", {
+		Name = "CollapseHit",
+		Size = UDim2.new(0, 30, 1, 0),
+		Position = UDim2.new(1, -30, 0, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		Parent = header,
+	})
 	local chev = Utility.Create("ImageLabel", {
 		Size = UDim2.new(0, 12, 0, 12),
-		Position = UDim2.new(1, -12, 0.5, -6),
+		Position = UDim2.new(0.5, -6, 0.5, -6),
 		BackgroundTransparency = 1,
 		Image = Icons.Get("Chevron"),
-		Parent = header,
+		Parent = chevHit,
 	})
 	win._theme:Bind(chev, "ImageColor3", "Accent")
 
-	local card = { _frame = frame, _rows = {}, _tab = tab, _win = win, Title = opts.Title or opts.Name or "Section" }
-	table.insert(win._cards, { Frame = frame, Rows = card._rows, Tab = tab })
+	local card = { _frame = frame, _rows = {}, _tab = tab, _win = win, _collapsed = false, Title = opts.Title or opts.Name or "Section" }
+	table.insert(win._cards, { Frame = frame, Rows = card._rows, Tab = tab, Card = card })
+
+	local function setCardCollapsed(v)
+		card._collapsed = v
+		for _, r in ipairs(card._rows) do
+			r.Visible = not v
+		end
+		Animation.Tween(chev, { Rotation = v and 180 or 0 }, 0.2)
+	end
+	card._setCollapsed = setCardCollapsed
+	function card:SetCollapsed(v)
+		setCardCollapsed(v ~= false)
+	end
+	win._cleanup:Add(chevHit.MouseButton1Click:Connect(function()
+		setCardCollapsed(not card._collapsed)
+	end))
 	table.insert(tab._cards, card)
 
 	function card:AddToggle(o)
@@ -2000,17 +2023,7 @@ function Pasta:CreateWindow(opts)
 		Parent = logoHolder,
 	})
 	theme:Bind(halo, "ImageColor3", "Accent")
-	local logoShadow = Utility.Create("ImageLabel", {
-		Size = UDim2.new(1, 0, 1, 0),
-		Position = UDim2.new(0, 2, 0, 2),
-		BackgroundTransparency = 1,
-		Image = opts.Logo or "rbxassetid://139568612294283",
-		ScaleType = Enum.ScaleType.Fit,
-		ImageColor3 = Color3.fromRGB(50, 10, 14),
-		ImageTransparency = 0.2,
-		ZIndex = 2,
-		Parent = logoHolder,
-	})
+	-- sem sombra deslocada no logo: a franja vermelha parecia defeito
 	local logoImg = Utility.Create("ImageLabel", {
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
@@ -2124,7 +2137,18 @@ function Pasta:CreateWindow(opts)
 	local function applySearch()
 		local q = string.lower(searchInput.Text or "")
 		for _, r in ipairs(win._searchRows) do
-			r.Frame.Visible = (q == "" or string.find(r.Name, q, 1, true) ~= nil)
+			local match = (q == "" or string.find(r.Name, q, 1, true) ~= nil)
+			r.Frame.Visible = match
+			if match and q ~= "" and r.Card and r.Card._collapsed and r.Card._setCollapsed then
+				r.Card._setCollapsed(false)
+			end
+		end
+		for _, c in ipairs(win._cards) do
+			if c.Card and c.Card._collapsed and q == "" then
+				for _, rowFrame in ipairs(c.Rows) do
+					rowFrame.Visible = false
+				end
+			end
 		end
 		for _, c in ipairs(win._cards) do
 			if q == "" then
@@ -2358,6 +2382,48 @@ function Pasta:CreateWindow(opts)
 		end
 	end))
 
+	-- ---- Botao fechar (X) + pill de reabrir ----
+	local closeBtn = Utility.Create("TextButton", {
+		Name = "CloseBtn",
+		Size = UDim2.new(0, 17, 0, 17),
+		Position = UDim2.new(1, -56, 0.5, -8.5),
+		BackgroundTransparency = 1,
+		Text = "X",
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		Parent = topBar,
+	})
+	theme:Bind(closeBtn, "TextColor3", "TextMuted")
+	cleanup:Add(closeBtn.MouseEnter:Connect(function()
+		Animation.Tween(closeBtn, { TextColor3 = theme.Current.Accent }, 0.15)
+	end))
+	cleanup:Add(closeBtn.MouseLeave:Connect(function()
+		Animation.Tween(closeBtn, { TextColor3 = theme.Current.TextMuted }, 0.15)
+	end))
+	local pill = Utility.Create("TextButton", {
+		Name = "PastaReopen",
+		Size = UDim2.new(0, 110, 0, 28),
+		Position = UDim2.new(0.5, -55, 0, 12),
+		Visible = false,
+		Text = opts.Name or opts.Brand or "pasta",
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		AutoButtonColor = false,
+		Parent = gui,
+	})
+	theme:Bind(pill, "BackgroundColor3", "PillBg")
+	theme:Bind(pill, "TextColor3", "TextPrimary")
+	Utility.Corner(pill, UDim.new(0, 14))
+	local pillStroke = Utility.Stroke(pill, theme.Current.Border, 1)
+	theme:Bind(pillStroke, "Color", "BorderActive")
+	win._pill = pill
+	cleanup:Add(pill.MouseButton1Click:Connect(function()
+		win:Show()
+	end))
+	cleanup:Add(closeBtn.MouseButton1Click:Connect(function()
+		win:Close()
+	end))
+
 	-- ---- Sidebar collapse (menu button agora faz algo) ----
 	cleanup:Add(menuBtn.MouseEnter:Connect(function()
 		Animation.Tween(menuBtn, { ImageColor3 = theme.Current.TextPrimary }, 0.15)
@@ -2365,14 +2431,13 @@ function Pasta:CreateWindow(opts)
 	cleanup:Add(menuBtn.MouseLeave:Connect(function()
 		Animation.Tween(menuBtn, { ImageColor3 = theme.Current.TextMuted }, 0.15)
 	end))
-	cleanup:Add(menuBtn.MouseButton1Click:Connect(function()
-		self._sidebarCollapsed = not self._sidebarCollapsed
-		local collapsed = self._sidebarCollapsed
+	local function setCollapsed(collapsed)
+		win._sidebarCollapsed = collapsed
 		Animation.Tween(sidebar, { Size = UDim2.new(0, collapsed and 44 or 155, 1, -58) }, 0.25)
-		for _, e in ipairs(self._tabEntries) do
+		for _, e in ipairs(win._tabEntries) do
 			e.Title.Visible = not collapsed
 		end
-		for _, c in ipairs(self._categories) do
+		for _, c in ipairs(win._categories) do
 			c.Header.Visible = not collapsed
 		end
 		Animation.Tween(content, {
@@ -2380,6 +2445,10 @@ function Pasta:CreateWindow(opts)
 			Position = collapsed and UDim2.new(0, 71, 0, 54) or UDim2.new(0, 182, 0, 54),
 		}, 0.25)
 		Animation.Tween(footer, { Position = collapsed and UDim2.new(0, 14, 1, -38) or UDim2.new(0, 18, 1, -38) }, 0.25)
+	end
+	win._setCollapsed = setCollapsed
+	cleanup:Add(menuBtn.MouseButton1Click:Connect(function()
+		setCollapsed(not win._sidebarCollapsed)
 	end))
 
 	-- ---- Drag pela TopBar (sem jump, com clamp) ----
@@ -2426,7 +2495,7 @@ function Pasta:CreateWindow(opts)
 			local y = (minY <= maxY) and math.clamp(target.Y, minY, maxY) or vp.Y / 2
 			local sx, sy = main.Position.X.Scale, main.Position.Y.Scale
 			main.Position = UDim2.new(sx, math.round(x - sx * vp.X), sy, math.round(y - sy * vp.Y))
-			self._homePos = main.Position
+			win._homePos = main.Position
 		end))
 		cleanup:Add(UserInputService.InputEnded:Connect(function(input)
 			if input == dragInput then
@@ -2478,12 +2547,24 @@ function Pasta:CreateWindow(opts)
 	end
 	function win:Show()
 		self:SetVisible(true)
+		if self._pill then
+			self._pill.Visible = false
+		end
 	end
 	function win:Hide()
 		self:SetVisible(false)
 	end
 	function win:ToggleVisibility()
 		self:SetVisible(not self._visible)
+		if self._visible and self._pill then
+			self._pill.Visible = false
+		end
+	end
+	function win:Close()
+		self:SetVisible(false)
+		if self._pill then
+			self._pill.Visible = true
+		end
 	end
 
 	local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
@@ -2516,6 +2597,12 @@ function Pasta:CreateWindow(opts)
 		pcall(function()
 			main:Destroy()
 		end)
+		if self._pill then
+			pcall(function()
+				self._pill:Destroy()
+			end)
+			self._pill = nil
+		end
 	end
 
 	win._sidebarCollapsed = win._scale < 0.68
